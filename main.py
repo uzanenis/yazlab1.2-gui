@@ -5,7 +5,6 @@ from tkinter import filedialog
 import csv
 from csv import reader
 import os
-import pandas as pd
 import time
 import multiprocessing as mp
 import pandas as pandas
@@ -156,11 +155,12 @@ def get_records_similarity_rate(str1, str2):
 
 
 selectedDisplay = []
+searchCount = 0
 
 
-def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter):
+def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter, selectedString, stringFilterStatus):
     print("Dividing rows per thread")
-    csv_file = csv.reader(open('1.csv', 'r', encoding="utf8"))
+    csv_file = csv.reader(open('test.csv', 'r', encoding="utf8"))
     row_count = sum(1 for _ in csv_file)
     print("Row count: ", row_count)
     rows_per_thread = int(row_count / thread_count)
@@ -169,7 +169,8 @@ def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter
         start = int(i * rows_per_thread)
         end = int(start + rows_per_thread)
         # p = mp.Process(target=process_line, args=(start, end, i))
-        p = mp.Process(target=thread_similarity_rate, args=(start, end, i, rate, selected_display, selected_filter))
+        p = mp.Process(target=thread_similarity_rate, args=(
+            start, end, i, rate, selected_display, selected_filter, selectedString, stringFilterStatus))
         p.start()
 
 
@@ -180,7 +181,7 @@ def process_line(start, end, thread_number):
     print("Thread number: ", thread_number + 1)
     print("\n\n")
     start_time = time.time()
-    with open('1.csv', 'r', encoding="utf8") as file:
+    with open('test.csv', 'r', encoding="utf8") as file:
         for i, line in enumerate(file):
             if start <= i < end:
                 with open('records/thread_' + str(thread_number + 1) + '.csv', 'a', encoding="utf8") as data:
@@ -191,33 +192,59 @@ def process_line(start, end, thread_number):
 test = ['product', 'issue']
 
 
-def thread_similarity_rate(start, end, thread_number, rate, selected_display, selected_filter):
+def thread_similarity_rate(start, end, thread_number, rate, selected_display, selected_filter, selected_string,
+                           stringFilterStatus):
     print("Start: ", start)
     print("End: ", end)
     print("Thread number: ", thread_number + 1)
     print("\n\n")
-    csvFile = pandas.read_csv('1.csv')
+    csvFile = pandas.read_csv('test.csv')
+    flag = False
     start_time = time.time()
-    for i in range(start, end):
-        for j in (start, end - 2):
+    for i in range(start, end - 1):
+        for j in (start + 1, len(csvFile) - 1):
             similarity_rate = get_records_similarity_rate(csvFile[selected_filter][i], csvFile[selected_filter][j])
             similarity_rate = float(similarity_rate.replace("% ", "").replace(" ", ""))
-            if similarity_rate > rate:
+            if similarity_rate >= rate:
                 with open('records/similarity_rate/thread_' + str(thread_number + 1) + '.csv', 'a',
-                          encoding="utf8") as data:
+                          encoding="utf-8") as data:
                     for k in range(0, len(selected_display)):
-                        data.write(str(csvFile[selected_display[k]][i]) + ', ')
-                        """data.write(
-                            "%" + str(similarity_rate) + csvFile['product'][i] + str(csvFile['complaint_id'][i]) +
-                            csvFile['product'][j] + str(csvFile['complaint_id'][j]) + "\n\n")"""
-                    data.write("\n\n")
+                        if stringFilterStatus == 'true':
+                            if csvFile[selected_string['name']][i] == selected_string['detail']:
+                                flag = True
+                                data.write(str(csvFile[selected_display[k]][i]) + ', ' + str(
+                                    csvFile[selected_display[k]][j]) + ',')
+                            else:
+                                flag = False
+                        else:
+                            data.write(str(csvFile[selected_display[k]][i]) + ', ' + str(
+                                csvFile[selected_display[k]][j]) + ',')
+                    if flag:
+                        data.write("\n")
+                    data.close()
             else:
                 pass
     end_time = time.time()
     print("Thread -> " + str(thread_number + 1) + " suresi ", end_time - start_time)
 
 
+def appendCsvFiles():
+    file_path = r"C:\Users\Enis\PycharmProjects\pythonProject1\records\similarity_rate"
+    # list all the files from the directory
+    file_list = os.listdir(file_path)
+    print(file_list)
+    #df_concat = pandas.concat([pandas.read_csv("C:\\Users\\Enis\\PycharmProjects\\pythonProject1\\records\similarity_rate\\" + f) for f in file_list], ignore_index=True)
+    for f in file_list:
+        df_concat = pandas.concat([pandas.read_csv("C:\\Users\\Enis\\PycharmProjects\\pythonProject1\\records\similarity_rate\\" + f)], ignore_index=True)
+        df_concat.to_csv('master.csv', mode='a', header=False, index=False)
+    """for file in file_list:
+        df_temp = pandas.read_csv("C:\\Users\\Enis\\PycharmProjects\\pythonProject1\\records\similarity_rate\\" + file)
+        df_append = df_append.append(df_temp, ignore_index=True)"""
+
+
 def main():
+    #appendCsvFiles()
+
     def openNewWindow():
         newWindow = Toplevel(window)
         newWindow.title("New")
@@ -225,7 +252,7 @@ def main():
         newFrame.pack()
         treeview_frame = tkinter.LabelFrame(newFrame, text="Treeview")
         treeview_frame.grid(row=0, column=0, padx=20, pady=10)
-        tv = ttk.Treeview(treeview_frame, show="headings", height=10)
+        tv = ttk.Treeview(treeview_frame, show="headings", height=40)
         columns = []
         # Treeview for csv
         displaySelectedItems = displayListbox_select.curselection()
@@ -235,13 +262,13 @@ def main():
         print(columns)
         tv["columns"] = columns
         for i in columns:
-            tv.column(i, width=500, anchor='c')
+            tv.column(i, width=200, anchor='c')
         for i in columns:
             tv.heading(i, text=i)
         tv.grid(row=0, column=0)
 
         # open file in read mode
-        with open('1.csv', 'r') as read_obj:
+        with open('master.csv', 'r') as read_obj:
             csv_reader = reader(read_obj)
             r_set = [row for row in csv_reader]
             v = []
@@ -265,6 +292,8 @@ def main():
             filterListbox_select.insert(END, item)
         for item in ListValues:
             displayListbox_select.insert(END, item)
+        for item in ListValues:
+            stringFilterListbox_select.insert(END, item)
 
     def button_command():
         threshold_value = threshold_value_entry.get()
@@ -280,13 +309,21 @@ def main():
             selectedDisplay.append(displayListbox_select.get(item2).lower().replace(" ", "_"))
         print("selected", selectedDisplay)
         print("Threshold Value:" + threshold_value + " Thread Count:" + thread_count)
-        divide_rows_per_thread(int(thread_count), int(threshold_value), selectedDisplay, selectedFilter)
-
-
         # String Filter Varsa
+        selectedString = {}
         stringFilterStatus = reg_status_var.get()
+        stringFilterSelectedItems = stringFilterListbox_select.curselection()
         if stringFilterStatus == "true":
-            print("Filtrelenecek String", stringFilterValue)
+            for item3 in stringFilterSelectedItems:
+                selectedStringFilter = stringFilterListbox_select.get(item3).lower().replace(" ", "_")
+            selectedString = {
+                'name': selectedStringFilter,
+                'detail': stringFilterValue,
+            }
+        print(selectedString)
+        divide_rows_per_thread(int(thread_count), int(threshold_value), selectedDisplay, selectedFilter, selectedString,
+                               stringFilterStatus)
+
         return None
 
     window = tkinter.Tk()
@@ -337,6 +374,13 @@ def main():
 
     registered_label.grid(row=0, column=0)
     registered_check.grid(row=1, column=0)
+
+    stringFilterListbox_label = tkinter.Label(courses_frame, text="İsme Göre Filtre Columnlar")
+    stringFilterListbox_select = tkinter.Listbox(courses_frame, selectmode=MULTIPLE, exportselection=0, width=11,
+                                                 height=5,
+                                                 font=('calibri', 15))
+    stringFilterListbox_label.grid(row=2, column=0)
+    stringFilterListbox_select.grid(row=3, column=0)
 
     stringFilter_value_label = tkinter.Label(courses_frame, text="Filtrelenecek String")
     stringFilter_value_label.grid(row=0, column=1)
