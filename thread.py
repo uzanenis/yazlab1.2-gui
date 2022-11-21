@@ -148,7 +148,8 @@ selectedDisplay = []
 searchCount = 0
 
 
-def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter, selectedString, stringFilterStatus):
+def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter, selectedString, stringFilterStatus,
+                           sameRecordStatus, sameRecordString):
     print("Dividing rows per thread")
     csv_file = csv.reader(open('test.csv', 'r', encoding="utf8"))
     row_count = sum(1 for _ in csv_file)
@@ -161,35 +162,93 @@ def divide_rows_per_thread(thread_count, rate, selected_display, selected_filter
             start = i * rows_per_thread
             end = start + rows_per_thread
             executor.submit(thread_similarity_rate, start, end, i, rate, selected_display, selected_filter,
-                            selectedString, stringFilterStatus)
+                            selectedString, stringFilterStatus, sameRecordStatus, sameRecordString)
+
+
+threadTimes = {}
+
+lastFilterArray = []
 
 
 def thread_similarity_rate(start, end, thread_number, rate, selected_display, selected_filter, selected_string,
-                           stringFilterStatus):
-    print("Start: ", start)
+                           stringFilterStatus, sameRecordStatus, sameRecordString):
+    """print("Start: ", start)
     print("End: ", end)
     print("Thread number: ", thread_number + 1)
-    print("\n\n")
+    print("\n\n")"""
     csvFile = pandas.read_csv('test.csv')
     ListValues = ["product", "issue", "company", "state", "complaint_id", "zip_code"]
     flag = False
+    stringFilterArray = []
+    global lastFilterArray
+    columnIndexes = {
+        'product': 0,
+        'issue': 1,
+        'company': 2,
+        'state': 3,
+        'complaint_id': 4,
+        'zip_code': 5
+    }
     start_time = time.time()
-    for i in range(start, end):
-        for j in range(i + 1, len(csvFile)):
-            similarity_rate = get_records_similarity_rate(csvFile[selected_filter][i], csvFile[selected_filter][j])
-            similarity_rate = float(similarity_rate.replace("% ", "").replace(" ", ""))
-            if similarity_rate >= rate:
-                with open('records/similarity_rate/thread_' + str(thread_number + 1) + '.csv', 'a',
-                          encoding="utf-8") as data:
-                    for k in range(0, len(ListValues)):
-                        if stringFilterStatus == 'true':
-                            if csvFile[selected_string['name']][i] == selected_string['detail']:
-                                flag = True
-                                data.write(str(csvFile[ListValues[k]][i]) + ', ' + str(
-                                    csvFile[ListValues[k]][j]) + ',' + str(similarity_rate) + '\n')
-                            else:
-                                flag = False
-                        else:
+    if stringFilterStatus == 'true':
+        for i in range(start, end):
+            if csvFile.iloc[i][selected_string['name']] == selected_string['detail']:
+                # print("csvfile: ", csvFile.iloc[i])
+                for j in range(0, len(ListValues)):
+                    stringFilterArray.append(str(csvFile[ListValues[j]][i]))
+                lastFilterArray.append(stringFilterArray.copy())
+                stringFilterArray.clear()
+        for k in range(start, end):
+            for m in range(k + 1, len(lastFilterArray)):
+                similarity_rate = get_records_similarity_rate(lastFilterArray[k][columnIndexes[selected_filter]],
+                                                              lastFilterArray[m][columnIndexes[selected_filter]])
+                similarity_rate = float(similarity_rate.replace("% ", "").replace(" ", ""))
+                if similarity_rate >= rate:
+                    with open('records/similarity_rate/thread_' + str(thread_number + 1) + '.csv', 'a',
+                              encoding="utf-8") as data:
+                        for x in range(0, len(ListValues)):
+                            if x == 0:
+                                data.write("1. Kayit,")
+                            data.write(str(lastFilterArray[k][columnIndexes[ListValues[x]]]) + ',')
+                            if x == len(ListValues) - 1:
+                                data.write("2. Kayit,")
+                                for y in range(0, len(ListValues)):
+                                    data.write(str(lastFilterArray[m][columnIndexes[ListValues[y]]]) + ',')
+                                data.write(str(similarity_rate) + "\n")
+
+    elif sameRecordStatus == 'true':
+        for i in range(start, end):
+            for j in range(i + 1, len(csvFile)):
+                similarity_rate = get_records_similarity_rate(csvFile[selected_filter][i], csvFile[selected_filter][j])
+                similarity_rate = float(similarity_rate.replace("% ", "").replace(" ", ""))
+                if similarity_rate >= rate:
+                    with open('records/similarity_rate/thread_' + str(thread_number + 1) + '.csv', 'a',
+                              encoding="utf-8") as data:
+                        if csvFile[selected_filter][i] == csvFile[selected_filter][j]:
+                            for k in range(0, len(ListValues)):
+                                if k == 0:
+                                    data.write("1. Kayit,")
+                                data.write(str(csvFile[ListValues[k]][i]) + ',')
+
+                                if k == len(ListValues) - 1:
+                                    data.write("2. Kayit,")
+                                    for m in range(0, len(ListValues)):
+                                        data.write(str(csvFile[ListValues[m]][j]) + ',')
+                                    data.write(str(similarity_rate) + "\n")
+                            if flag:
+                                data.write("\n")
+                else:
+                    pass
+
+    else:
+        for i in range(start, end):
+            for j in range(i + 1, len(csvFile)):
+                similarity_rate = get_records_similarity_rate(csvFile[selected_filter][i], csvFile[selected_filter][j])
+                similarity_rate = float(similarity_rate.replace("% ", "").replace(" ", ""))
+                if similarity_rate >= rate:
+                    with open('records/similarity_rate/thread_' + str(thread_number + 1) + '.csv', 'a',
+                              encoding="utf-8") as data:
+                        for k in range(0, len(ListValues)):
                             if k == 0:
                                 data.write("1. Kayit,")
                             data.write(str(csvFile[ListValues[k]][i]) + ',')
@@ -199,12 +258,15 @@ def thread_similarity_rate(start, end, thread_number, rate, selected_display, se
                                 for m in range(0, len(ListValues)):
                                     data.write(str(csvFile[ListValues[m]][j]) + ',')
                                 data.write(str(similarity_rate) + "\n")
-                    if flag:
-                        data.write("\n")
-            else:
-                pass
+                        if flag:
+                            data.write("\n")
+                else:
+                    pass
     end_time = time.time()
     print("Thread -> " + str(thread_number + 1) + " suresi ", end_time - start_time)
+    threadTime = end_time - start_time
+    global threadTimes
+    threadTimes[str(thread_number + 1)] = threadTime
 
 
 def appendCsvFiles():
@@ -230,7 +292,15 @@ def main():
         newFrame.pack()
         treeview_frame = tkinter.LabelFrame(newFrame, text="Treeview")
         treeview_frame.grid(row=0, column=0, padx=20, pady=10)
+        threadtime_frame = tkinter.LabelFrame(newFrame, text="Thread Times")
+        threadtime_frame.grid(row=1, column=0, padx=10, pady=10)
         tv = ttk.Treeview(treeview_frame, show="headings", height=40)
+        threadTimes_select = tkinter.Listbox(threadtime_frame, selectmode=MULTIPLE, exportselection=0, width=31,
+                                             height=5,
+                                             font=('calibri', 12))
+        threadTimes_select.grid(row=0, column=0)
+        for thread in threadTimes:
+            threadTimes_select.insert(END, "Thread" + str(thread) + " -> " + str(threadTimes[thread]))
         columns = ["1. Kayit"]
         # Treeview for csv
         displaySelectedItems = displayListbox_select.curselection()
@@ -244,13 +314,13 @@ def main():
         print(columns)
         tv["columns"] = columns
         for i in columns:
-            tv.column(i, width=100, anchor='c')
+            tv.column(i, width=125, anchor='c')
         for i in columns:
             tv.heading(i, text=i)
         tv.grid(row=0, column=0)
 
         # open file in read mode
-        with open('master.csv', 'r') as read_obj:
+        with open('test.csv', 'r') as read_obj:
             csv_reader = reader(read_obj)
             r_set = [row for row in csv_reader]
             v = ["1. Kayit"]
@@ -284,10 +354,9 @@ def main():
         ListValues = ["Product", "Issue", "Company", "State", "Complaint ID", "Zip Code"]
         for item in ListValues:
             filterListbox_select.insert(END, item)
-        for item in ListValues:
             displayListbox_select.insert(END, item)
-        for item in ListValues:
             stringFilterListbox_select.insert(END, item)
+            sameRecordListbox_select.insert(END, item)
 
     def button_command():
         threshold_value = threshold_value_entry.get()
@@ -306,6 +375,7 @@ def main():
         # String Filter Varsa
         selectedString = {}
         stringFilterStatus = reg_status_var.get()
+        sameRecordStatus = same_records_var.get()
         stringFilterSelectedItems = stringFilterListbox_select.curselection()
         if stringFilterStatus == "true":
             for item3 in stringFilterSelectedItems:
@@ -315,8 +385,16 @@ def main():
                 'detail': stringFilterValue,
             }
         print(selectedString)
+        sameRecordSelectedItems = sameRecordListbox_select.curselection()
+        if sameRecordStatus == 'true':
+            for item4 in sameRecordSelectedItems:
+                sameRecordFilter = sameRecordListbox_select.get(item4).lower().replace(" ", "_")
+            sameRecordString = {
+                'name': sameRecordFilter,
+            }
+        print(sameRecordString)
         divide_rows_per_thread(int(thread_count), int(threshold_value), selectedDisplay, selectedFilter, selectedString,
-                               stringFilterStatus)
+                               stringFilterStatus, sameRecordStatus, sameRecordString)
 
         return None
 
@@ -369,12 +447,27 @@ def main():
     registered_label.grid(row=0, column=0)
     registered_check.grid(row=1, column=0)
 
+    same_records_label = tkinter.Label(courses_frame, text="a Filtreleme")
+    same_records_var = tkinter.StringVar(value="false")
+    same_records_check = tkinter.Checkbutton(courses_frame, text="Ayni kayitlari getir",
+                                             variable=same_records_var, onvalue="true", offvalue="false")
+
+    same_records_label.grid(row=0, column=1)
+    same_records_check.grid(row=1, column=2)
+
     stringFilterListbox_label = tkinter.Label(courses_frame, text="İsme Göre Filtre Columnlar")
     stringFilterListbox_select = tkinter.Listbox(courses_frame, selectmode=MULTIPLE, exportselection=0, width=11,
                                                  height=5,
                                                  font=('calibri', 15))
     stringFilterListbox_label.grid(row=2, column=0)
     stringFilterListbox_select.grid(row=3, column=0)
+
+    sameRecordListbox_label = tkinter.Label(courses_frame, text="Aynı Columnlar")
+    sameRecordListbox_select = tkinter.Listbox(courses_frame, selectmode=MULTIPLE, exportselection=0, width=11,
+                                               height=5,
+                                               font=('calibri', 15))
+    sameRecordListbox_label.grid(row=2, column=2)
+    sameRecordListbox_select.grid(row=3, column=2)
 
     stringFilter_value_label = tkinter.Label(courses_frame, text="Filtrelenecek String")
     stringFilter_value_label.grid(row=0, column=1)
